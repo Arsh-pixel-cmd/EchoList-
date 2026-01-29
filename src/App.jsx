@@ -59,7 +59,22 @@ const App = () => {
 
   // Handle incoming data from Peer
   const handlePeerData = (data) => {
-    // Assuming data is a Task object for now
+    // 1. Initial Sync (Array of Tasks)
+    if (Array.isArray(data)) {
+      setTasks(prev => {
+        // Merge arrays, filtering duplicates by ID
+        const existingIds = new Set(prev.map(t => t.id));
+        const newTasks = data.filter(t => !existingIds.has(t.id));
+        if (newTasks.length > 0) {
+          setShowSyncToast(true);
+          return [...newTasks, ...prev].sort((a, b) => b.id - a.id); // Sort by newest
+        }
+        return prev;
+      });
+      return;
+    }
+
+    // 2. Single Task Update
     if (data && data.text) {
       setTasks(prev => {
         // Prevent duplicates
@@ -75,8 +90,16 @@ const App = () => {
       setIdentity(newIdentity);
       localStorage.setItem('echo_identity', JSON.stringify(newIdentity));
     }
-    // Don't show toast here, rely on connection status
   };
+
+  // Trigger Full Sync when Connected
+  useEffect(() => {
+    if (isConnected && tasks.length > 0) {
+      // Send all tasks to the newly connected peer
+      console.log("Broadcasting Full History (" + tasks.length + " items)");
+      broadcastData(tasks);
+    }
+  }, [isConnected]);
 
   const addTask = (text, source = "Desktop") => {
     const newTask = {

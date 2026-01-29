@@ -51,38 +51,72 @@ const SyncOverlay = ({ isOpen, onClose, onSync, onConnectionChange, onPeerData }
 
     // Initialize PeerJS on mount (or when overlay opens)
     useEffect(() => {
-        const pid = Math.random().toString(36).substr(2, 9);
-        const peer = initPeer(pid, (data) => {
+        // 1. Persistence: Load or Create My Peer ID
+        let savedPid = localStorage.getItem('echo_peer_id');
+        if (!savedPid) {
+            savedPid = Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('echo_peer_id', savedPid);
+        }
+
+        const peer = initPeer(savedPid, (data) => {
             console.log("Received Data:", data);
 
             // Handle Handshake
             if (data && data.type === 'handshake') {
                 setRemoteDevice(data.device);
                 setStatus('success');
+                // Persist Remote ID for auto-reconnect
+                // Note: We don't have the remote PeerID in the handshake payload currently,
+                // but we know who we are connected to contextually.
+                // Improvement: We will rely on 'conn.peer' from handleConnected
                 return;
             }
 
             // Verify encryption here if we were being strict.
             if (onPeerData) onPeerData(data);
-        }, handleConnected); // Pass onConnected callback
+        }, (conn) => {
+            // Success Callback
+            handleConnected(conn);
+            // Persist the remote peer ID
+            localStorage.setItem('echo_last_remote_peer', conn.peer);
+        });
 
         // Wait for 'open' event to confirm explicit connection to signaling server
         if (peer.open) {
             setPeerId(peer.id);
+            tryAutoReconnect(peer);
         }
         peer.on('open', (id) => {
             console.log("PeerJS Connected to Server:", id);
             setPeerId(id);
+            tryAutoReconnect(peer);
         });
         peer.on('error', (err) => {
             console.error("PeerJS Error (Global):", err);
             // If we lose connection to server, maybe show error?
+            setStatus('error'); // Show error UI to user
         });
 
         return () => {
             // peer.destroy(); // Keep it alive
         };
     }, []);
+
+    const tryAutoReconnect = (peer) => {
+        const lastRemote = localStorage.getItem('echo_last_remote_peer');
+        if (lastRemote) {
+            console.log("Attempting Auto-Reconnect to:", lastRemote);
+            // Wait a bit for the other peer to be online
+            setTimeout(() => {
+                connectToPeer(lastRemote, (incoming) => {
+                    if (onPeerData) onPeerData(incoming);
+                }, handleConnected, (err) => {
+                    console.log("Auto-reconnect failed/timed out", err);
+                    // Don't error UI on background reconnect attempt
+                });
+            }, 1000);
+        }
+    };
 
     const [micVolume, setMicVolume] = useState(0);
 
