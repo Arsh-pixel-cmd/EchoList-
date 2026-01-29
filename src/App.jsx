@@ -100,6 +100,12 @@ const App = () => {
 
   // Handle incoming data from Peer
   const handlePeerData = (data) => {
+    // 0. Handle Deletions
+    if (data && data.type === 'delete') {
+      setTasks(prev => prev.filter(t => t.id !== data.id));
+      return;
+    }
+
     // 1. Initial Sync (Array of Tasks)
     if (Array.isArray(data)) {
       setTasks(prev => {
@@ -141,6 +147,12 @@ const App = () => {
       broadcastData(tasks);
     }
   }, [isConnected]);
+
+  const removeTask = (id) => {
+    setTasks(prev => prev.filter(t => t.id !== id));
+    // Broadcast Deletion
+    broadcastData({ type: 'delete', id });
+  };
 
   const addTask = (text, source = "Desktop") => {
     // Intelligent Parsing
@@ -264,7 +276,7 @@ const App = () => {
               <TaskItem
                 key={task.id}
                 task={task}
-                onComplete={(id) => setTasks(tasks.filter(t => t.id !== id))}
+                onComplete={removeTask}
               />
             ))}
           </AnimatePresence>
