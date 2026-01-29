@@ -45,7 +45,7 @@
 1.  **Clone the Repo**
     ```bash
     git clone https://github.com/yourusername/echolist.git
-    cd echolist
+    cd EchoList 
     ```
 
 2.  **Install Dependencies**
@@ -76,4 +76,4 @@ I built EchoList to challenge the assumption that "Sync requires a Cloud Databas
 
 ---
 
-* Crafted with ❤️ by [Arsh]*
+* Crafted with ❤️ by [Arsh]
