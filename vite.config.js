@@ -25,8 +25,5 @@ export default defineConfig({
   // To silence it, we can use build.rollupOptions.external
   build: {
     chunkSizeWarningLimit: 1000,
-    rollupOptions: {
-      external: ['fs', 'path'],
-    }
   }
 })
