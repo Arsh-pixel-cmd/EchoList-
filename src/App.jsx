@@ -13,6 +13,8 @@ import TaskItem from './components/TaskItem';
 import SyncOverlay from './components/SyncOverlay';
 import { broadcastData } from './lib/sync/peer';
 
+import * as chrono from 'chrono-node';
+
 const App = () => {
   // Initialize Tasks from LocalStorage
   const [tasks, setTasks] = useState(() => {
@@ -28,6 +30,45 @@ const App = () => {
   const [isSyncOverlayOpen, setIsSyncOverlayOpen] = useState(false);
   const [identity, setIdentity] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+
+  // Request Notification Permission
+  useEffect(() => {
+    if (Notification && Notification.permission !== 'granted') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Check for Reminders Loop
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+
+      // Check for due reminders
+      tasks.forEach(task => {
+        if (task.reminderTime && !task.reminderSent) {
+          const reminderDate = new Date(task.reminderTime);
+          // Check if it's time (within last minute to avoid double firing if interval drifts slightly)
+          if (now >= reminderDate && now - reminderDate < 60000) {
+
+            // Send Notification
+            if (Notification.permission === 'granted') {
+              new Notification("EchoList Reminder", {
+                body: `Upcoming: ${task.text}`,
+                // icon: '/vite.svg' // Placeholder
+              });
+
+              // Mark as sent in state
+              setTasks(current => current.map(t =>
+                t.id === task.id ? { ...t, reminderSent: true } : t
+              ));
+            }
+          }
+        }
+      });
+    }, 10000); // Check every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [tasks]);
 
   // Save Tasks to LocalStorage
   useEffect(() => {
@@ -102,12 +143,28 @@ const App = () => {
   }, [isConnected]);
 
   const addTask = (text, source = "Desktop") => {
+    // Intelligent Parsing
+    const parsedDate = chrono.parseDate(text);
+    let reminderTime = null;
+    let meta = source === "Mobile" ? "Synced via smartphone bridge" : "Captured via studio terminal";
+
+    if (parsedDate) {
+      // Calculate 5 minutes prior
+      const d = new Date(parsedDate);
+      d.setMinutes(d.getMinutes() - 5);
+      reminderTime = d.toISOString();
+      const timeStr = parsedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      meta = `Reminder set for ${timeStr} (-5m)`;
+    }
+
     const newTask = {
       id: Date.now(),
       text,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       source,
-      meta: source === "Mobile" ? "Synced via smartphone bridge" : "Captured via studio terminal"
+      meta,
+      reminderTime,
+      reminderSent: false
     };
     setTasks([newTask, ...tasks]);
 
