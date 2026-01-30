@@ -14,6 +14,8 @@ import SyncOverlay from './components/SyncOverlay';
 import { broadcastData } from './lib/sync/peer';
 
 import * as chrono from 'chrono-node';
+import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 const App = () => {
   // Initialize Tasks from LocalStorage
@@ -32,10 +34,16 @@ const App = () => {
   const [isConnected, setIsConnected] = useState(false);
 
   // Request Notification Permission
+  // Request Notification Permission
   useEffect(() => {
-    if (Notification && Notification.permission !== 'granted') {
-      Notification.requestPermission();
-    }
+    const requestPerms = async () => {
+      if (Capacitor.isNativePlatform()) {
+        await LocalNotifications.requestPermissions();
+      } else if (Notification && Notification.permission !== 'granted') {
+        Notification.requestPermission();
+      }
+    };
+    requestPerms();
   }, []);
 
   // Check for Reminders Loop
@@ -51,11 +59,26 @@ const App = () => {
           if (now >= reminderDate && now - reminderDate < 60000) {
 
             // Send Notification
-            if (Notification.permission === 'granted') {
-              new Notification("EchoList Reminder", {
-                body: `Upcoming: ${task.text}`,
-                // icon: '/vite.svg' // Placeholder
-              });
+            if ((typeof Notification !== 'undefined' && Notification.permission === 'granted') || Capacitor.isNativePlatform()) {
+              if (Capacitor.isNativePlatform()) {
+                LocalNotifications.schedule({
+                  notifications: [{
+                    title: "EchoList Reminder",
+                    body: `Upcoming: ${task.text}`,
+                    id: Math.floor(task.id / 1000), // Ensure int ID
+                    schedule: { at: new Date(Date.now() + 100) }, // Trigger immediately
+                    sound: null,
+                    attachments: null,
+                    actionTypeId: "",
+                    extra: null
+                  }]
+                });
+              } else {
+                new Notification("EchoList Reminder", {
+                  body: `Upcoming: ${task.text}`,
+                  // icon: '/vite.svg' // Placeholder
+                });
+              }
 
               // Mark as sent in state
               setTasks(current => current.map(t =>
