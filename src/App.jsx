@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import TaskItem from './components/TaskItem';
 import SyncOverlay from './components/SyncOverlay';
+import DocsOverlay from './components/DocsOverlay';
 import { broadcastData } from './lib/sync/peer';
 
 import * as chrono from 'chrono-node';
@@ -31,6 +32,7 @@ const App = () => {
 
   // Sync State
   const [isSyncOverlayOpen, setIsSyncOverlayOpen] = useState(false);
+  const [isDocsOpen, setIsDocsOpen] = useState(false);
   const [identity, setIdentity] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -108,6 +110,7 @@ const App = () => {
       if (e.key === 'Escape') {
         setIsInputOpen(false);
         setIsSyncOverlayOpen(false);
+        setIsDocsOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -244,7 +247,10 @@ const App = () => {
           </button>
 
           {/* Unique Hamburger Menu */}
-          <button className="w-10 h-10 bg-slate-900 border border-slate-900 rounded-xl flex items-center justify-center text-white hover:bg-slate-800 transition-all shadow-lg hover:shadow-slate-900/20 group">
+          <button
+            onClick={() => setIsDocsOpen(true)}
+            className="w-10 h-10 bg-slate-900 border border-slate-900 rounded-xl flex items-center justify-center text-white hover:bg-slate-800 transition-all shadow-lg hover:shadow-slate-900/20 group"
+          >
             <div className="flex flex-col gap-1 items-end">
               <div className="w-4 h-0.5 bg-white group-hover:w-3 transition-all"></div>
               <div className="w-3 h-0.5 bg-white group-hover:w-4 transition-all"></div>
@@ -353,6 +359,12 @@ const App = () => {
         onSync={handleSync}
         onConnectionChange={setIsConnected}
         onPeerData={handlePeerData}
+      />
+
+      {/* Docs Overlay */}
+      <DocsOverlay
+        isOpen={isDocsOpen}
+        onClose={() => setIsDocsOpen(false)}
       />
 
       {/* Sync Toast */}
