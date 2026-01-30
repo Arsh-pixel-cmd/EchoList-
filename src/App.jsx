@@ -16,6 +16,7 @@ import { broadcastData } from './lib/sync/peer';
 import * as chrono from 'chrono-node';
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { Analytics } from '@vercel/analytics/react';
 
 const App = () => {
   // Initialize Tasks from LocalStorage
@@ -388,6 +389,7 @@ const App = () => {
         <Plus size={24} className="group-hover:rotate-90 transition-transform duration-500" />
       </motion.button>
 
+      <Analytics />
     </div>
   );
 };
