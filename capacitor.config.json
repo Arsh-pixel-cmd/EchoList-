@@ -3,6 +3,6 @@
   "appName": "EchoList",
   "webDir": "dist",
   "server": {
-    "url": "https://to-doredefine.vercel.app/"
+    "url": "https://www.echolist.in/"
   }
 }
