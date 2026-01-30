@@ -1,6 +1,6 @@
 {
   "appId": "com.echolist.app",
-  "appName": "Echolist",
+  "appName": "EchoList",
   "webDir": "dist",
   "server": {
     "url": "https://to-doredefine.vercel.app/"
