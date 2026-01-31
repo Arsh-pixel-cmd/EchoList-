@@ -12,6 +12,7 @@ import {
 import TaskItem from './components/TaskItem';
 import SyncOverlay from './components/SyncOverlay';
 import DocsOverlay from './components/DocsOverlay';
+import InstallPrompt from './components/InstallPrompt';
 import { broadcastData } from './lib/sync/peer';
 
 import * as chrono from 'chrono-node';
@@ -402,6 +403,9 @@ const App = () => {
       </motion.button>
 
       <Analytics />
+
+      {/* PWA Install Prompt */}
+      <InstallPrompt />
     </div>
   );
 };
