@@ -13,7 +13,7 @@ export const initPeer = (syncId, onData, onConnected) => {
     // For this "Identity-less" concept, the ID *is* the address.
 
     peerInstance = new Peer(syncId, {
-        debug: 1,
+        debug: 0, // Disable verbose logging
         config: {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
@@ -26,7 +26,7 @@ export const initPeer = (syncId, onData, onConnected) => {
     });
 
     peerInstance.on('open', (id) => {
-        console.log('My Peer ID is: ' + id);
+        // console.log('My Peer ID is: ' + id);
     });
 
     peerInstance.on('connection', (conn) => {
@@ -34,7 +34,7 @@ export const initPeer = (syncId, onData, onConnected) => {
     });
 
     peerInstance.on('error', (err) => {
-        console.error("Peer Error:", err);
+        // console.error("Peer Error:", err);
     });
 
     return peerInstance;
@@ -67,7 +67,7 @@ export const initPeer = (syncId, onData, onConnected) => {
 
 export const connectToPeer = (remotePeerId, onData, onConnected, onError) => {
     if (!peerInstance) return;
-    console.log("Attempting to connect to Peer:", remotePeerId);
+    // console.log("Attempting to connect to Peer:", remotePeerId);
 
     // Connect to peer (let PeerJS negotiate)
     const conn = peerInstance.connect(remotePeerId);
@@ -79,7 +79,7 @@ export const connectToPeer = (remotePeerId, onData, onConnected, onError) => {
 
     // Handle immediate connection errors
     conn.on('error', (err) => {
-        console.error("Connection Error:", err);
+        // console.error("Connection Error:", err);
         if (onError) onError(err);
     });
 
@@ -90,7 +90,7 @@ export const connectToPeer = (remotePeerId, onData, onConnected, onError) => {
 
 const setupConnection = (conn, onData, onConnected) => {
     conn.on('open', () => {
-        console.log("Connected to: " + conn.peer);
+        // console.log("Connected to: " + conn.peer);
         connections.push(conn);
         if (onConnected) onConnected(conn);
     });

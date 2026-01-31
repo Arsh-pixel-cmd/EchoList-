@@ -171,7 +171,7 @@ const App = () => {
   useEffect(() => {
     if (isConnected && tasks.length > 0) {
       // Send all tasks to the newly connected peer
-      console.log("Broadcasting Full History (" + tasks.length + " items)");
+      // console.log("Broadcasting Full History (" + tasks.length + " items)");
       broadcastData(tasks);
     }
   }, [isConnected]);
