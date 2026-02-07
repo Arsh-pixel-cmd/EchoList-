@@ -217,6 +217,15 @@ const App = () => {
     }
   };
 
+  const updateTask = (id, newText) => {
+    setTasks(prev => prev.map(task =>
+      task.id === id ? { ...task, text: newText } : task
+    ));
+
+    // Broadcast Update
+    broadcastData({ type: 'update', id, text: newText });
+  };
+
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans antialiased relative">
       {/* Minimal Grid Background */}
@@ -308,6 +317,8 @@ const App = () => {
                 key={task.id}
                 task={task}
                 onComplete={removeTask}
+                onArchive={removeTask}
+                onUpdate={updateTask}
               />
             ))}
           </AnimatePresence>
