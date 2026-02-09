@@ -66,21 +66,38 @@ export const initPeer = (syncId, onData, onConnected) => {
 // -> The "Memory Phrase" will just set the encryption key.
 
 export const connectToPeer = (remotePeerId, onData, onConnected, onError) => {
-    if (!peerInstance) return;
-    // console.log("Attempting to connect to Peer:", remotePeerId);
+    if (!peerInstance) {
+        if (onError) onError(new Error("Peer not initialized"));
+        return;
+    }
+
+    if (peerInstance.disconnected) {
+        console.warn("Peer is disconnected. Reconnecting before dialing...");
+        peerInstance.reconnect();
+    }
+
+    console.log(`[PeerJS] dialing ${remotePeerId}...`);
 
     // Connect to peer (let PeerJS negotiate)
-    const conn = peerInstance.connect(remotePeerId);
+    const conn = peerInstance.connect(remotePeerId, {
+        reliable: true
+    });
 
     if (!conn) {
-        if (onError) onError(new Error("Failed to initiate connection"));
+        if (onError) onError(new Error("Failed to initiate connection (conn is null)"));
         return;
     }
 
     // Handle immediate connection errors
     conn.on('error', (err) => {
-        // console.error("Connection Error:", err);
+        console.error(`[PeerJS] Connection Error to ${remotePeerId}:`, err);
         if (onError) onError(err);
+    });
+
+    // Handle connection close (so we can clean up if it never opened)
+    conn.on('close', () => {
+        // console.log(`[PeerJS] Connection to ${remotePeerId} closed.`);
+        // Note: PeerJS might close immediately if ID not found.
     });
 
     setupConnection(conn, onData, onConnected);
@@ -90,7 +107,7 @@ export const connectToPeer = (remotePeerId, onData, onConnected, onError) => {
 
 const setupConnection = (conn, onData, onConnected) => {
     conn.on('open', () => {
-        // console.log("Connected to: " + conn.peer);
+        console.log(`[PeerJS] Connection ESTABLISHED to: ${conn.peer}`);
         connections.push(conn);
         if (onConnected) onConnected(conn);
     });
@@ -120,27 +137,37 @@ export const ensureConnection = () => {
             return;
         }
 
-        if (!peerInstance.disconnected && !peerInstance.destroyed) {
+        // Must be open AND not destroyed
+        if (peerInstance.open && !peerInstance.destroyed && !peerInstance.disconnected) {
             resolve(peerInstance.id);
             return;
         }
 
-        console.log("Peer disconnected, reconnecting...");
+        console.log("Peer disconnected or closed, reconnecting...");
 
         const onOpen = () => {
-            peerInstance.off('open', onOpen);
-            peerInstance.off('error', onError);
+            cleanupListeners();
             resolve(peerInstance.id);
         };
 
         const onError = (err) => {
+            cleanupListeners();
+            reject(err);
+        };
+
+        const cleanupListeners = () => {
             peerInstance.off('open', onOpen);
             peerInstance.off('error', onError);
-            reject(err);
         };
 
         peerInstance.on('open', onOpen);
         peerInstance.on('error', onError);
-        peerInstance.reconnect();
+
+        if (peerInstance.destroyed) {
+            // Re-init required if destroyed, but here we just error for now as init is external
+            reject(new Error("Peer destroyed. Please reload."));
+        } else {
+            peerInstance.reconnect();
+        }
     });
 };

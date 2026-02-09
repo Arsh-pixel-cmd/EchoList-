@@ -134,10 +134,13 @@ const SyncOverlay = ({ isOpen, onClose, onSync, onConnectionChange, onPeerData }
 
                         // Retry Logic for Connection
                         let attempts = 0;
-                        const maxAttempts = 3;
+                        const maxAttempts = 5; // Increased attempts
+                        const baseDelay = 1000;
 
                         const attemptConnection = () => {
                             attempts++;
+                            console.log(`Connection attempt ${attempts}/${maxAttempts} to ${data}...`);
+
                             connectToPeer(data, (incoming) => {
                                 // Handle Handshake for Initiator
                                 if (incoming && incoming.type === 'handshake') {
@@ -146,13 +149,17 @@ const SyncOverlay = ({ isOpen, onClose, onSync, onConnectionChange, onPeerData }
                                     return;
                                 }
                                 if (onPeerData) onPeerData(incoming);
-                            }, handleConnected, (err) => {
+                            }, (conn) => {
+                                handleConnected(conn);
+                            }, (err) => {
                                 console.error(`Connection attempt ${attempts} failed:`, err);
                                 if (attempts < maxAttempts) {
-                                    // console.log("Retrying...");
-                                    setTimeout(attemptConnection, 1000);
+                                    // Exponential backoff
+                                    const delay = baseDelay * attempts;
+                                    console.log(`Retrying in ${delay}ms...`);
+                                    setTimeout(attemptConnection, delay);
                                 } else {
-                                    setErrorMessage("Could not connect. Ensure both devices are online.");
+                                    setErrorMessage("Could not connect. Ensure connected device is online.");
                                     setStatus('error');
                                 }
                             });
@@ -217,7 +224,9 @@ const SyncOverlay = ({ isOpen, onClose, onSync, onConnectionChange, onPeerData }
 
             try {
                 // Ensure we are actually online before sending our ID out
+                console.log("Ensuring connection before broadcast...");
                 await ensureConnection();
+                console.log("Connection verified. Broadcasting ID:", peerId);
 
                 await broadcastAudio(peerId);
                 setTimeout(() => {
