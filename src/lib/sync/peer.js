@@ -114,3 +114,10 @@ export const broadcastData = (data) => {
 };
 
 export const getMyPeerId = () => peerInstance?.id;
+
+export const checkConnection = () => {
+    if (peerInstance && peerInstance.disconnected) {
+        // console.log("Peer disconnected from server, reconnecting...");
+        peerInstance.reconnect();
+    }
+};

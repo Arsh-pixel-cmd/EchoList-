@@ -132,19 +132,33 @@ const SyncOverlay = ({ isOpen, onClose, onSync, onConnectionChange, onPeerData }
                         // Data received via Audio = Remote Peer ID
                         console.log("Heard Peer ID:", data);
 
-                        connectToPeer(data, (incoming) => {
-                            // Handle Handshake for Initiator
-                            if (incoming && incoming.type === 'handshake') {
-                                setRemoteDevice(incoming.device);
-                                setStatus('success');
-                                return;
-                            }
-                            if (onPeerData) onPeerData(incoming);
-                        }, handleConnected, (err) => {
-                            console.error("Failed to connect to peer:", err);
-                            setErrorMessage("Could not connect. Ensure both devices are online.");
-                            setStatus('error');
-                        });
+                        // Retry Logic for Connection
+                        let attempts = 0;
+                        const maxAttempts = 3;
+
+                        const attemptConnection = () => {
+                            attempts++;
+                            connectToPeer(data, (incoming) => {
+                                // Handle Handshake for Initiator
+                                if (incoming && incoming.type === 'handshake') {
+                                    setRemoteDevice(incoming.device);
+                                    setStatus('success');
+                                    return;
+                                }
+                                if (onPeerData) onPeerData(incoming);
+                            }, handleConnected, (err) => {
+                                console.error(`Connection attempt ${attempts} failed:`, err);
+                                if (attempts < maxAttempts) {
+                                    // console.log("Retrying...");
+                                    setTimeout(attemptConnection, 1000);
+                                } else {
+                                    setErrorMessage("Could not connect. Ensure both devices are online.");
+                                    setStatus('error');
+                                }
+                            });
+                        };
+
+                        attemptConnection();
 
                         setIsListening(false);
                         // Pass the "Connection" as the sync event
