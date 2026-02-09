@@ -50,52 +50,7 @@ const App = () => {
     requestPerms();
   }, []);
 
-  // Check for Reminders Loop
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = new Date();
 
-      // Check for due reminders
-      tasks.forEach(task => {
-        if (task.reminderTime && !task.reminderSent) {
-          const reminderDate = new Date(task.reminderTime);
-          // Check if it's time (within last minute to avoid double firing if interval drifts slightly)
-          if (now >= reminderDate && now - reminderDate < 60000) {
-
-            // Send Notification
-            if ((typeof Notification !== 'undefined' && Notification.permission === 'granted') || Capacitor.isNativePlatform()) {
-              if (Capacitor.isNativePlatform()) {
-                LocalNotifications.schedule({
-                  notifications: [{
-                    title: "EchoList Reminder",
-                    body: `Upcoming: ${task.text}`,
-                    id: Math.floor(task.id / 1000), // Ensure int ID
-                    schedule: { at: new Date(Date.now() + 100) }, // Trigger immediately
-                    sound: null,
-                    attachments: null,
-                    actionTypeId: "",
-                    extra: null
-                  }]
-                });
-              } else {
-                new Notification("EchoList Reminder", {
-                  body: `Upcoming: ${task.text}`,
-                  // icon: '/vite.svg' // Placeholder
-                });
-              }
-
-              // Mark as sent in state
-              setTasks(current => current.map(t =>
-                t.id === task.id ? { ...t, reminderSent: true } : t
-              ));
-            }
-          }
-        }
-      });
-    }, 10000); // Check every 10 seconds
-
-    return () => clearInterval(interval);
-  }, [tasks]);
 
   // Save Tasks to LocalStorage
   useEffect(() => {
@@ -176,10 +131,20 @@ const App = () => {
     }
   }, [isConnected]);
 
-  const removeTask = (id) => {
+  const removeTask = async (id) => {
     setTasks(prev => prev.filter(t => t.id !== id));
     // Broadcast Deletion
     broadcastData({ type: 'delete', id });
+
+    // Cancel Notification if exists
+    if (Capacitor.isNativePlatform()) {
+      const notifId = Math.floor(id / 1000);
+      try {
+        await LocalNotifications.cancel({ notifications: [{ id: notifId }] });
+      } catch (e) {
+        console.error("Failed to cancel notification", e);
+      }
+    }
   };
 
   const addTask = (text, source = "Desktop") => {
@@ -214,6 +179,26 @@ const App = () => {
     if (source === "Mobile") {
       setShowSyncToast(true);
       setTimeout(() => setShowSyncToast(false), 5000);
+    }
+
+    // Schedule Native Notification
+    if (reminderTime && Capacitor.isNativePlatform()) {
+      const triggerDate = new Date(reminderTime);
+      if (triggerDate > new Date()) {
+        const notifId = Math.floor(newTask.id / 1000);
+        LocalNotifications.schedule({
+          notifications: [{
+            title: "EchoList Reminder",
+            body: `Upcoming: ${newTask.text}`,
+            id: notifId,
+            schedule: { at: triggerDate },
+            sound: null,
+            attachments: null,
+            actionTypeId: "",
+            extra: null
+          }]
+        }).catch(err => console.error("Failed to schedule notification", err));
+      }
     }
   };
 
