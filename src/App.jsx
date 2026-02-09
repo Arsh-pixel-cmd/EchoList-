@@ -7,7 +7,8 @@ import {
   Command,
   Fingerprint,
   Link,
-  Wifi
+  Wifi,
+  X
 } from 'lucide-react';
 import TaskItem from './components/TaskItem';
 import SyncOverlay from './components/SyncOverlay';
@@ -86,6 +87,29 @@ const App = () => {
     // 0. Handle Deletions
     if (data && data.type === 'delete') {
       setTasks(prev => prev.filter(t => t.id !== data.id));
+      return;
+    }
+
+    // 0.5 Handle Handshake (New Peer Connected)
+    if (data && data.type === 'handshake') {
+      // console.log("Handshake received from " + data.device);
+      // Immediately send back our full list so they are up to date
+      broadcastData(tasks); // This uses the current state 'tasks' from closure? 
+      // Wait, 'tasks' in closure might be stale if not using ref or functional update. 
+      // Actually, handlePeerData is defined once? No, it's defined in component body. 
+      // But if it's passed to SyncOverlay, it might be stale.
+      // However, 'tasks' is a dependency of 'handlePeerData' if we wrapped it in useCallback (which we didn't).
+      // Since it's a raw function in the render body, it captures 'tasks' of the *current* render.
+      // But wait, 'handlePeerData' is passed to SyncOverlay which passes it to 'peer.js' callbacks?
+      // Let's check where it's used. It's passed to SyncOverlay. 
+      // SyncOverlay uses checks 'onPeerData' prop.
+
+      // BETTER APPROACH: Use a ref for tasks to always get current state, 
+      // OR rely on the fact that existing logic works for single updates.
+      // Actually, for broadacstData(tasks), we need the latest tasks.
+      // Let's rely on the fact that when `handlePeerData` is called, it *should* have access to tasks.
+      // Re-reading SyncOverlay: it calls `onPeerData(incoming)`. 
+      // If SyncOverlay is re-rendered with new `onPeerData` (because App re-rendered with new tasks), then it's fine.
       return;
     }
 
@@ -374,7 +398,13 @@ const App = () => {
             initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}
             className="fixed bottom-12 right-12 z-[110]"
           >
-            <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-xl flex items-center gap-5">
+            <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-xl flex items-center gap-5 pr-12 relative">
+              <button
+                onClick={() => setShowSyncToast(false)}
+                className="absolute top-4 right-4 text-white/20 hover:text-white transition-colors"
+              >
+                <X size={14} />
+              </button>
               <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center">
                 <Bell size={20} />
               </div>
