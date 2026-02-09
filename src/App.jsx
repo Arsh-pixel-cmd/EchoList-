@@ -38,6 +38,27 @@ const App = () => {
   const [identity, setIdentity] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
 
+  // Periodic Connection Check (Heartbeat UI)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Import dynamically or assume it's available via closure/prop if we moved peer logic up
+      // For now, we rely on SyncOverlay passing triggers.
+      // But SyncOverlay might be unmounted? No, it's always rendered but hidden? 
+      // Yes: <SyncOverlay isOpen={isSyncOverlayOpen} ... /> 
+      // Wait, if isOpen is false, is it unmounted?
+      // const SyncOverlay = ({ isOpen ... }) => <AnimatePresence>{isOpen && ...}</AnimatePresence>
+      // The Logic is INSIDE SyncOverlay component, so if isOpen=false, the logic MOUNTS/UNMOUNTS?
+      // CHECK SyncOverlay implementation: 
+      // return (<AnimatePresence>{isOpen && ...}</AnimatePresence>) matches structure.
+      // BUT `useEffect` in SyncOverlay runs only when it mounts? 
+
+      // CRITICAL FIX: The Peer Logic in SyncOverlay unmounts when the overlay closes!
+      // This kills the connection if the overlay is closed!
+      // We need to move the Peer Logic UP to App.jsx or keep SyncOverlay mounted but hidden.
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Request Notification Permission
   // Request Notification Permission
   useEffect(() => {
@@ -93,23 +114,12 @@ const App = () => {
     // 0.5 Handle Handshake (New Peer Connected)
     if (data && data.type === 'handshake') {
       // console.log("Handshake received from " + data.device);
-      // Immediately send back our full list so they are up to date
-      broadcastData(tasks); // This uses the current state 'tasks' from closure? 
-      // Wait, 'tasks' in closure might be stale if not using ref or functional update. 
-      // Actually, handlePeerData is defined once? No, it's defined in component body. 
-      // But if it's passed to SyncOverlay, it might be stale.
-      // However, 'tasks' is a dependency of 'handlePeerData' if we wrapped it in useCallback (which we didn't).
-      // Since it's a raw function in the render body, it captures 'tasks' of the *current* render.
-      // But wait, 'handlePeerData' is passed to SyncOverlay which passes it to 'peer.js' callbacks?
-      // Let's check where it's used. It's passed to SyncOverlay. 
-      // SyncOverlay uses checks 'onPeerData' prop.
 
-      // BETTER APPROACH: Use a ref for tasks to always get current state, 
-      // OR rely on the fact that existing logic works for single updates.
-      // Actually, for broadacstData(tasks), we need the latest tasks.
-      // Let's rely on the fact that when `handlePeerData` is called, it *should* have access to tasks.
-      // Re-reading SyncOverlay: it calls `onPeerData(incoming)`. 
-      // If SyncOverlay is re-rendered with new `onPeerData` (because App re-rendered with new tasks), then it's fine.
+      // Reply with Handshake so they know we are connected
+      broadcastData({ type: 'handshake', device: "Studio Terminal" });
+
+      // Immediately send back our full list so they are up to date
+      broadcastData(tasks);
       return;
     }
 

@@ -65,11 +65,13 @@ const SyncOverlay = ({ isOpen, onClose, onSync, onConnectionChange, onPeerData }
             if (data && data.type === 'handshake') {
                 setRemoteDevice(data.device);
                 setStatus('success');
-                // Persist Remote ID for auto-reconnect
-                // Note: We don't have the remote PeerID in the handshake payload currently,
-                // but we know who we are connected to contextually.
-                // Improvement: We will rely on 'conn.peer' from handleConnected
                 return;
+            }
+
+            // If we receive ANY data, we are effectively connected
+            if (status !== 'success') {
+                setStatus('success');
+                setRemoteDevice("Remote Peer");
             }
 
             // Verify encryption here if we were being strict.
@@ -106,13 +108,25 @@ const SyncOverlay = ({ isOpen, onClose, onSync, onConnectionChange, onPeerData }
         const lastRemote = localStorage.getItem('echo_last_remote_peer');
         if (lastRemote) {
             console.log("Attempting Auto-Reconnect to:", lastRemote);
+            setStatus('processing'); // Show visual indicator
+            setErrorMessage("Reconnecting to last session...");
+
             // Wait a bit for the other peer to be online
             setTimeout(() => {
                 connectToPeer(lastRemote, (incoming) => {
+                    // Handle Handshake
+                    if (incoming && incoming.type === 'handshake') {
+                        setRemoteDevice(incoming.device);
+                        setStatus('success');
+                        return;
+                    }
                     if (onPeerData) onPeerData(incoming);
-                }, handleConnected, (err) => {
+                }, (conn) => {
+                    handleConnected(conn);
+                }, (err) => {
                     console.log("Auto-reconnect failed/timed out", err);
-                    // Don't error UI on background reconnect attempt
+                    setStatus('idle'); // Reset to allow manual retry
+                    setErrorMessage("");
                 });
             }, 1000);
         }

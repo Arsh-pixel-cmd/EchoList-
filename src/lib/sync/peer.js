@@ -110,22 +110,59 @@ const setupConnection = (conn, onData, onConnected) => {
         console.log(`[PeerJS] Connection ESTABLISHED to: ${conn.peer}`);
         connections.push(conn);
         if (onConnected) onConnected(conn);
+
+        // Start Heartbeat for this connection
+        startHeartbeat(conn);
     });
 
     conn.on('data', (data) => {
-        // Data is encrypted? handled by caller.
+        // Handle Heartbeat
+        if (data && data.type === 'ping') {
+            // conn.send({ type: 'pong' }); // Optional: Reply if needed
+            return;
+        }
         onData(data);
     });
 
     conn.on('close', () => {
+        console.log(`[PeerJS] Connection closed: ${conn.peer}`);
         connections = connections.filter(c => c !== conn);
     });
+
+    conn.on('error', (err) => {
+        console.warn(`[PeerJS] Connection error on ${conn.peer}:`, err);
+        connections = connections.filter(c => c !== conn);
+    });
+};
+
+const startHeartbeat = (conn) => {
+    const interval = setInterval(() => {
+        if (!conn.open) {
+            clearInterval(interval);
+            return;
+        }
+        try {
+            conn.send({ type: 'ping' });
+        } catch (err) {
+            console.warn(`[PeerJS] Heartbeat failed for ${conn.peer}, closing.`);
+            conn.close();
+            connections = connections.filter(c => c !== conn);
+            clearInterval(interval);
+        }
+    }, 3000); // Check every 3 seconds
+
+    // Clear interval on close
+    conn.on('close', () => clearInterval(interval));
 };
 
 export const broadcastData = (data) => {
     connections.forEach(conn => {
         if (conn.open) {
-            conn.send(data);
+            try {
+                conn.send(data);
+            } catch (e) {
+                console.warn("Failed to send to peer:", conn.peer);
+            }
         }
     });
 };
@@ -170,4 +207,8 @@ export const ensureConnection = () => {
             peerInstance.reconnect();
         }
     });
+};
+
+export const getActiveConnectionCount = () => {
+    return connections.length;
 };
