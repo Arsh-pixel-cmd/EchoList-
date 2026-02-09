@@ -6,6 +6,9 @@ echo "Generating iOS Icon..."
 sips -z 1024 1024 "$SRC" --out "ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png"
 
 # Android
+# Remove adaptive icon directory to prevent override
+rm -rf android/app/src/main/res/mipmap-anydpi-v26
+
 echo "Generating Android Icons..."
 
 # mdpi (48x48)
