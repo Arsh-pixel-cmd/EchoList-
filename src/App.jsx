@@ -191,9 +191,12 @@ const App = () => {
             title: "EchoList Reminder",
             body: `Upcoming: ${newTask.text}`,
             id: notifId,
-            schedule: { at: triggerDate },
-            sound: null,
-            attachments: null,
+            schedule: {
+              at: triggerDate,
+              allowWhileIdle: true
+            },
+            sound: "beep.wav",
+            smallIcon: "ic_launcher",
             actionTypeId: "",
             extra: null
           }]
