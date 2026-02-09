@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { deriveIdentity } from '../lib/sync/crypto';
 import { broadcastAudio, listenAudio } from '../lib/sync/audio';
-import { broadcastData, initPeer, connectToPeer, getMyPeerId } from '../lib/sync/peer';
+import { broadcastData, initPeer, connectToPeer, ensureConnection } from '../lib/sync/peer';
 
 const SyncOverlay = ({ isOpen, onClose, onSync, onConnectionChange, onPeerData }) => {
     const [activeTab, setActiveTab] = useState('cognitive'); // 'cognitive' | 'sonic'
@@ -216,16 +216,21 @@ const SyncOverlay = ({ isOpen, onClose, onSync, onConnectionChange, onPeerData }
             setStatus('processing');
 
             try {
+                // Ensure we are actually online before sending our ID out
+                await ensureConnection();
+
                 await broadcastAudio(peerId);
                 setTimeout(() => {
                     setIsBroadcasting(false);
                     setStatus('idle');
                 }, 5000);
             } catch (e) {
-                console.error("Broadcast UI Error:", e);
+                console.error("Broadcast/Connection Error:", e);
                 setIsBroadcasting(false);
                 setStatus('error');
-                // alert(e.message); // Removed as requested
+                setErrorMessage("Connection lost. Retrying...");
+                // Try to recover for next time
+                try { ensureConnection(); } catch (err) { }
             }
         }
     };

@@ -113,11 +113,34 @@ export const broadcastData = (data) => {
     });
 };
 
-export const getMyPeerId = () => peerInstance?.id;
+export const ensureConnection = () => {
+    return new Promise((resolve, reject) => {
+        if (!peerInstance) {
+            reject(new Error("Peer not initialized"));
+            return;
+        }
 
-export const checkConnection = () => {
-    if (peerInstance && peerInstance.disconnected) {
-        // console.log("Peer disconnected from server, reconnecting...");
+        if (!peerInstance.disconnected && !peerInstance.destroyed) {
+            resolve(peerInstance.id);
+            return;
+        }
+
+        console.log("Peer disconnected, reconnecting...");
+
+        const onOpen = () => {
+            peerInstance.off('open', onOpen);
+            peerInstance.off('error', onError);
+            resolve(peerInstance.id);
+        };
+
+        const onError = (err) => {
+            peerInstance.off('open', onOpen);
+            peerInstance.off('error', onError);
+            reject(err);
+        };
+
+        peerInstance.on('open', onOpen);
+        peerInstance.on('error', onError);
         peerInstance.reconnect();
-    }
+    });
 };
