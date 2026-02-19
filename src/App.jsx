@@ -15,6 +15,7 @@ import TaskItem from './components/TaskItem';
 import SyncOverlay from './components/SyncOverlay';
 import DocsOverlay from './components/DocsOverlay';
 import InstallPrompt from './components/InstallPrompt';
+import NotificationsDemo from './components/NotificationsDemo';
 import { broadcastData } from './lib/sync/peer';
 
 import * as chrono from 'chrono-node';
@@ -36,6 +37,7 @@ const App = () => {
   // Sync State
   const [isSyncOverlayOpen, setIsSyncOverlayOpen] = useState(false);
   const [isDocsOpen, setIsDocsOpen] = useState(false);
+  const [isNotifDemoOpen, setIsNotifDemoOpen] = useState(false);
   const [identity, setIdentity] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -90,6 +92,7 @@ const App = () => {
         setIsInputOpen(false);
         setIsSyncOverlayOpen(false);
         setIsDocsOpen(false);
+        setIsNotifDemoOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -263,6 +266,15 @@ const App = () => {
         </div>
 
         <div className="flex gap-2 pointer-events-auto">
+          {/* Notifications Demo Button */}
+          <button
+            onClick={() => setIsNotifDemoOpen(true)}
+            className="h-10 w-10 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-orange-500 hover:border-orange-100 transition-all shadow-sm"
+            title="Notification Demo"
+          >
+            <Bell size={16} />
+          </button>
+
           {/* Sync Button */}
           <button
             onClick={() => setIsSyncOverlayOpen(true)}
@@ -441,6 +453,29 @@ const App = () => {
 
       {/* PWA Install Prompt */}
       <InstallPrompt />
+      {/* Notifications Demo Overlay */}
+      <AnimatePresence>
+        {isNotifDemoOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm"
+          >
+            <div className="absolute inset-0" onClick={() => setIsNotifDemoOpen(false)} />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className="relative z-10 w-full max-w-md"
+            >
+              <button
+                onClick={() => setIsNotifDemoOpen(false)}
+                className="absolute -top-12 right-0 text-white/50 hover:text-white"
+              >
+                <X size={24} />
+              </button>
+              <NotificationsDemo />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

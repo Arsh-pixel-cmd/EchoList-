@@ -4,5 +4,12 @@
   "webDir": "dist",
   "server": {
     "url": "https://www.echolist.in/"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_launcher_round",
+      "iconColor": "#488AFF",
+      "sound": "beep.wav"
+    }
   }
 }
