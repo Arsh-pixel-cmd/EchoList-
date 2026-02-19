@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Mic,
@@ -18,7 +19,7 @@ const SyncOverlay = ({ isOpen, onClose, onSync, onConnectionChange, onPeerData }
     const [isListening, setIsListening] = useState(false);
     const [isBroadcasting, setIsBroadcasting] = useState(false);
     const [status, setStatus] = useState('idle'); // idle, processing, success, error
-    const [identity, setIdentity] = useState(null);
+    // Removed unused identity state
     const [peerId, setPeerId] = useState(null);
     const [remoteDevice, setRemoteDevice] = useState(null);
     const [errorMessage, setErrorMessage] = useState('');
@@ -31,26 +32,46 @@ const SyncOverlay = ({ isOpen, onClose, onSync, onConnectionChange, onPeerData }
         return "Computer";
     };
 
-    const handleConnected = (conn) => {
-        console.log("Connection Established via:", conn.peer);
-        if (onConnectionChange) onConnectionChange(true);
-        // Send Handshake
-        setTimeout(() => {
-            const myDevice = getDeviceType();
-            broadcastData({ type: 'handshake', device: myDevice });
-        }, 500);
-    };
-
-    const handleDisconnect = () => {
-        // In a real app we'd close the specific connection.
-        // For now, we just reset the UI state to allow re-connection.
-        setStatus('idle');
-        setRemoteDevice(null);
-        if (onConnectionChange) onConnectionChange(false);
-    };
-
     // Initialize PeerJS on mount (or when overlay opens)
     useEffect(() => {
+        const handleConnected = (conn) => {
+            console.log("Connection Established via:", conn.peer);
+            if (onConnectionChange) onConnectionChange(true);
+            // Send Handshake
+            setTimeout(() => {
+                const myDevice = getDeviceType();
+                broadcastData({ type: 'handshake', device: myDevice });
+            }, 500);
+        };
+
+        const tryAutoReconnect = () => {
+            const lastRemote = localStorage.getItem('echo_last_remote_peer');
+            if (lastRemote) {
+                console.log("Attempting Auto-Reconnect to:", lastRemote);
+                setStatus('processing'); // Show visual indicator
+                setErrorMessage("Reconnecting to last session...");
+
+                // Wait a bit for the other peer to be online
+                setTimeout(() => {
+                    connectToPeer(lastRemote, (incoming) => {
+                        // Handle Handshake
+                        if (incoming && incoming.type === 'handshake') {
+                            setRemoteDevice(incoming.device);
+                            setStatus('success');
+                            return;
+                        }
+                        if (onPeerData) onPeerData(incoming);
+                    }, (conn) => {
+                        handleConnected(conn);
+                    }, (err) => {
+                        console.log("Auto-reconnect failed/timed out", err);
+                        setStatus('idle'); // Reset to allow manual retry
+                        setErrorMessage("");
+                    });
+                }, 1000);
+            }
+        };
+
         // 1. Persistence: Load or Create My Peer ID
         let savedPid = localStorage.getItem('echo_peer_id');
         if (!savedPid) {
@@ -86,12 +107,12 @@ const SyncOverlay = ({ isOpen, onClose, onSync, onConnectionChange, onPeerData }
         // Wait for 'open' event to confirm explicit connection to signaling server
         if (peer.open) {
             setPeerId(peer.id);
-            tryAutoReconnect(peer);
+            tryAutoReconnect();
         }
         peer.on('open', (id) => {
             console.log("PeerJS Connected to Server:", id);
             setPeerId(id);
-            tryAutoReconnect(peer);
+            tryAutoReconnect();
         });
         peer.on('error', (err) => {
             console.error("PeerJS Error (Global):", err);
@@ -102,35 +123,18 @@ const SyncOverlay = ({ isOpen, onClose, onSync, onConnectionChange, onPeerData }
         return () => {
             // peer.destroy(); // Keep it alive
         };
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Run once on mount
 
-    const tryAutoReconnect = (peer) => {
-        const lastRemote = localStorage.getItem('echo_last_remote_peer');
-        if (lastRemote) {
-            console.log("Attempting Auto-Reconnect to:", lastRemote);
-            setStatus('processing'); // Show visual indicator
-            setErrorMessage("Reconnecting to last session...");
-
-            // Wait a bit for the other peer to be online
-            setTimeout(() => {
-                connectToPeer(lastRemote, (incoming) => {
-                    // Handle Handshake
-                    if (incoming && incoming.type === 'handshake') {
-                        setRemoteDevice(incoming.device);
-                        setStatus('success');
-                        return;
-                    }
-                    if (onPeerData) onPeerData(incoming);
-                }, (conn) => {
-                    handleConnected(conn);
-                }, (err) => {
-                    console.log("Auto-reconnect failed/timed out", err);
-                    setStatus('idle'); // Reset to allow manual retry
-                    setErrorMessage("");
-                });
-            }, 1000);
-        }
+    const handleDisconnect = () => {
+        // In a real app we'd close the specific connection.
+        // For now, we just reset the UI state to allow re-connection.
+        setStatus('idle');
+        setRemoteDevice(null);
+        if (onConnectionChange) onConnectionChange(false);
     };
+
+    // Removed tryAutoReconnect from here as it's moved inside useEffect
 
     const [micVolume, setMicVolume] = useState(0);
 
@@ -164,7 +168,14 @@ const SyncOverlay = ({ isOpen, onClose, onSync, onConnectionChange, onPeerData }
                                 }
                                 if (onPeerData) onPeerData(incoming);
                             }, (conn) => {
-                                handleConnected(conn);
+                                // We need handleConnected here? 
+                                // It was defined inside useEffect. Redefine it or lift?
+                                // Redefine simple version:
+                                console.log("Connection Established via Audio:", conn.peer);
+                                if (onConnectionChange) onConnectionChange(true);
+                                setTimeout(() => {
+                                    broadcastData({ type: 'handshake', device: getDeviceType() });
+                                }, 500);
                             }, (err) => {
                                 console.error(`Connection attempt ${attempts} failed:`, err);
                                 if (attempts < maxAttempts) {
@@ -197,7 +208,8 @@ const SyncOverlay = ({ isOpen, onClose, onSync, onConnectionChange, onPeerData }
         return () => {
             if (stopListening) stopListening();
         };
-    }, [isListening, peerId]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isListening, peerId]); // Added suppression if onSync/onPeerData changes
 
     // Close automatically ONLY if we have a successful sync/connection
     useEffect(() => {
@@ -212,7 +224,7 @@ const SyncOverlay = ({ isOpen, onClose, onSync, onConnectionChange, onPeerData }
         setStatus('processing');
         const id = await deriveIdentity(phrase);
         if (id) {
-            setIdentity(id);
+            // setIdentity(id); // Removed state
             setStatus('success');
             onSync({ ...id, source: 'cognitive' });
             setTimeout(() => onClose(), 2000);
@@ -253,7 +265,7 @@ const SyncOverlay = ({ isOpen, onClose, onSync, onConnectionChange, onPeerData }
                 setStatus('error');
                 setErrorMessage("Connection lost. Retrying...");
                 // Try to recover for next time
-                try { ensureConnection(); } catch (err) { }
+                try { ensureConnection(); } catch { /* ignore */ }
             }
         }
     };

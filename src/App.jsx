@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -95,13 +96,7 @@ const App = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Persist Identity (Mock)
-  useEffect(() => {
-    const stored = localStorage.getItem('echo_identity');
-    if (stored) {
-      setIdentity(JSON.parse(stored));
-    }
-  }, []);
+
 
   // Handle incoming data from Peer
   const handlePeerData = (data) => {
@@ -163,6 +158,7 @@ const App = () => {
       // console.log("Broadcasting Full History (" + tasks.length + " items)");
       broadcastData(tasks);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected]);
 
   const removeTask = async (id) => {

@@ -1,3 +1,4 @@
+/* eslint-env node */
 import ggwave from 'ggwave';
 
 global.window = {};

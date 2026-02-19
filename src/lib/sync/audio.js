@@ -7,12 +7,6 @@ let stream = null;
 const initGGWave = async () => {
     if (ggwaveInstance) return ggwaveInstance;
 
-    const config = {
-        sampleRate: 48000,
-        sampleRateIn: 48000,
-        sampleRateOut: 48000,
-    };
-
     try {
         ggwaveInstance = await ggwave({
             locateFile: (path) => {
@@ -125,7 +119,7 @@ export const listenAudio = async (onMessage) => {
     // Check instance health
     try {
         if (ggwaveInstance && ggwaveInstance.HEAP8.buffer.byteLength === 0) ggwaveInstance = null;
-    } catch (e) { ggwaveInstance = null; }
+    } catch { ggwaveInstance = null; }
 
     const gw = await initGGWave();
     if (!gw) return;

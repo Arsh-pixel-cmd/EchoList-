@@ -25,7 +25,7 @@ export const initPeer = (syncId, onData, onConnected) => {
         }
     });
 
-    peerInstance.on('open', (id) => {
+    peerInstance.on('open', () => {
         // console.log('My Peer ID is: ' + id);
     });
 
@@ -33,7 +33,7 @@ export const initPeer = (syncId, onData, onConnected) => {
         setupConnection(conn, onData, onConnected);
     });
 
-    peerInstance.on('error', (err) => {
+    peerInstance.on('error', () => {
         // console.error("Peer Error:", err);
     });
 
@@ -160,7 +160,7 @@ export const broadcastData = (data) => {
         if (conn.open) {
             try {
                 conn.send(data);
-            } catch (e) {
+            } catch {
                 console.warn("Failed to send to peer:", conn.peer);
             }
         }

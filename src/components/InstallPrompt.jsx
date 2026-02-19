@@ -1,26 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Share, X } from 'lucide-react';
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 
 const InstallPrompt = () => {
     const [deferredPrompt, setDeferredPrompt] = useState(null);
     const [showIOSPrompt, setShowIOSPrompt] = useState(false);
-    const [isIOS, setIsIOS] = useState(false);
-    const [isStandalone, setIsStandalone] = useState(false);
+
+    // Initialize lazily
+    const [isIOS] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+        }
+        return false;
+    });
+
+    const [isStandalone] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return window.matchMedia('(display-mode: standalone)').matches ||
+                window.navigator.standalone ||
+                document.referrer.includes('android-app://');
+        }
+        return false;
+    });
 
     useEffect(() => {
-        // Detect if already installed/standalone
-        const isStandaloneMode = window.matchMedia('(display-mode: standalone)').matches ||
-            window.navigator.standalone ||
-            document.referrer.includes('android-app://');
-
-        setIsStandalone(isStandaloneMode);
-
-        // Detect iOS
-        const userAgent = window.navigator.userAgent.toLowerCase();
-        const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
-        setIsIOS(isIosDevice);
-
         // Capture install prompt for Android/Desktop
         const handleBeforeInstallPrompt = (e) => {
             e.preventDefault();
