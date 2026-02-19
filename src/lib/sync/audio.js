@@ -38,7 +38,7 @@ export const broadcastAudio = async (text) => {
             console.warn("GGWave Instance seemed detached/aborted. Re-initializing.");
             ggwaveInstance = null;
         }
-    } catch (e) { ggwaveInstance = null; }
+    } catch { ggwaveInstance = null; }
 
     const gw = await initGGWave();
     if (!gw) return;

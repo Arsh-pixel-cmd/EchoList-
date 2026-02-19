@@ -143,7 +143,7 @@ const startHeartbeat = (conn) => {
         }
         try {
             conn.send({ type: 'ping' });
-        } catch (err) {
+        } catch {
             console.warn(`[PeerJS] Heartbeat failed for ${conn.peer}, closing.`);
             conn.close();
             connections = connections.filter(c => c !== conn);
