@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
-  Menu,
   Bell,
   Command,
   Fingerprint,
@@ -15,8 +14,9 @@ import TaskItem from './components/TaskItem';
 import SyncOverlay from './components/SyncOverlay';
 import DocsOverlay from './components/DocsOverlay';
 import InstallPrompt from './components/InstallPrompt';
-import NotificationsDemo from './components/NotificationsDemo';
+import NotificationCenter from './components/NotificationCenter';
 import { broadcastData } from './lib/sync/peer';
+import NotificationService from './services/NotificationService';
 
 import * as chrono from 'chrono-node';
 import { Capacitor } from '@capacitor/core';
@@ -37,32 +37,43 @@ const App = () => {
   // Sync State
   const [isSyncOverlayOpen, setIsSyncOverlayOpen] = useState(false);
   const [isDocsOpen, setIsDocsOpen] = useState(false);
-  const [isNotifDemoOpen, setIsNotifDemoOpen] = useState(false);
+  const [isNotifCenterOpen, setIsNotifCenterOpen] = useState(false);
   const [identity, setIdentity] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+
+  // Notification badge count
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // ── Init Notification Service ───────────────────────────────────
+  useEffect(() => {
+    NotificationService.init();
+
+    // Count unread notifications
+    const history = NotificationService.getHistory();
+    setUnreadCount(history.filter(n => !n.read).length);
+
+    // Listeners
+    NotificationService.addListeners(
+      () => {
+        // When a notification is received, update count
+        setUnreadCount(prev => prev + 1);
+      },
+      (action) => {
+        console.log('Notification action:', action.actionId);
+      }
+    );
+
+    return () => NotificationService.removeAllListeners();
+  }, []);
 
   // Periodic Connection Check (Heartbeat UI)
   useEffect(() => {
     const interval = setInterval(() => {
-      // Import dynamically or assume it's available via closure/prop if we moved peer logic up
-      // For now, we rely on SyncOverlay passing triggers.
-      // But SyncOverlay might be unmounted? No, it's always rendered but hidden? 
-      // Yes: <SyncOverlay isOpen={isSyncOverlayOpen} ... /> 
-      // Wait, if isOpen is false, is it unmounted?
-      // const SyncOverlay = ({ isOpen ... }) => <AnimatePresence>{isOpen && ...}</AnimatePresence>
-      // The Logic is INSIDE SyncOverlay component, so if isOpen=false, the logic MOUNTS/UNMOUNTS?
-      // CHECK SyncOverlay implementation: 
-      // return (<AnimatePresence>{isOpen && ...}</AnimatePresence>) matches structure.
-      // BUT `useEffect` in SyncOverlay runs only when it mounts? 
-
-      // CRITICAL FIX: The Peer Logic in SyncOverlay unmounts when the overlay closes!
-      // This kills the connection if the overlay is closed!
-      // We need to move the Peer Logic UP to App.jsx or keep SyncOverlay mounted but hidden.
+      // Placeholder for heartbeat logic
     }, 2000);
     return () => clearInterval(interval);
   }, []);
 
-  // Request Notification Permission
   // Request Notification Permission
   useEffect(() => {
     const requestPerms = async () => {
@@ -74,8 +85,6 @@ const App = () => {
     };
     requestPerms();
   }, []);
-
-
 
   // Save Tasks to LocalStorage
   useEffect(() => {
@@ -92,14 +101,12 @@ const App = () => {
         setIsInputOpen(false);
         setIsSyncOverlayOpen(false);
         setIsDocsOpen(false);
-        setIsNotifDemoOpen(false);
+        setIsNotifCenterOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-
 
   // Handle incoming data from Peer
   const handlePeerData = (data) => {
@@ -111,12 +118,7 @@ const App = () => {
 
     // 0.5 Handle Handshake (New Peer Connected)
     if (data && data.type === 'handshake') {
-      // console.log("Handshake received from " + data.device);
-
-      // Reply with Handshake so they know we are connected
       broadcastData({ type: 'handshake', device: "Studio Terminal" });
-
-      // Immediately send back our full list so they are up to date
       broadcastData(tasks);
       return;
     }
@@ -124,12 +126,11 @@ const App = () => {
     // 1. Initial Sync (Array of Tasks)
     if (Array.isArray(data)) {
       setTasks(prev => {
-        // Merge arrays, filtering duplicates by ID
         const existingIds = new Set(prev.map(t => t.id));
         const newTasks = data.filter(t => !existingIds.has(t.id));
         if (newTasks.length > 0) {
           setShowSyncToast(true);
-          return [...newTasks, ...prev].sort((a, b) => b.id - a.id); // Sort by newest
+          return [...newTasks, ...prev].sort((a, b) => b.id - a.id);
         }
         return prev;
       });
@@ -139,7 +140,6 @@ const App = () => {
     // 2. Single Task Update
     if (data && data.text) {
       setTasks(prev => {
-        // Prevent duplicates
         if (prev.find(t => t.id === data.id)) return prev;
         return [data, ...prev];
       });
@@ -157,8 +157,6 @@ const App = () => {
   // Trigger Full Sync when Connected
   useEffect(() => {
     if (isConnected && tasks.length > 0) {
-      // Send all tasks to the newly connected peer
-      // console.log("Broadcasting Full History (" + tasks.length + " items)");
       broadcastData(tasks);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -166,10 +164,8 @@ const App = () => {
 
   const removeTask = async (id) => {
     setTasks(prev => prev.filter(t => t.id !== id));
-    // Broadcast Deletion
     broadcastData({ type: 'delete', id });
 
-    // Cancel Notification if exists
     if (Capacitor.isNativePlatform()) {
       const notifId = Math.floor(id / 1000);
       try {
@@ -184,15 +180,19 @@ const App = () => {
     // Intelligent Parsing
     const parsedDate = chrono.parseDate(text);
     let reminderTime = null;
-    let meta = source === "Mobile" ? "Synced via smartphone bridge" : "Captured via studio terminal";
+
+    // Auto-detect category for theming
+    const category = NotificationService.detectCategory(text);
+    let meta = source === "Mobile"
+      ? "Synced via smartphone bridge"
+      : `${category.icon} ${category.label} · Captured via studio terminal`;
 
     if (parsedDate) {
-      // Calculate 5 minutes prior
       const d = new Date(parsedDate);
       d.setMinutes(d.getMinutes() - 5);
       reminderTime = d.toISOString();
       const timeStr = parsedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      meta = `Reminder set for ${timeStr} (-5m)`;
+      meta = `${category.icon} ${category.label} · Reminder at ${timeStr}`;
     }
 
     const newTask = {
@@ -202,7 +202,8 @@ const App = () => {
       source,
       meta,
       reminderTime,
-      reminderSent: false
+      reminderSent: false,
+      categoryId: category.id,
     };
     setTasks([newTask, ...tasks]);
 
@@ -214,26 +215,17 @@ const App = () => {
       setTimeout(() => setShowSyncToast(false), 5000);
     }
 
-    // Schedule Native Notification
-    if (reminderTime && Capacitor.isNativePlatform()) {
+    // ── Smart Notification Scheduling ────────────────────────────
+    if (reminderTime) {
       const triggerDate = new Date(reminderTime);
       if (triggerDate > new Date()) {
-        const notifId = Math.floor(newTask.id / 1000);
-        LocalNotifications.schedule({
-          notifications: [{
-            title: "EchoList Reminder",
-            body: `Upcoming: ${newTask.text}`,
-            id: notifId,
-            schedule: {
-              at: triggerDate,
-              allowWhileIdle: true
-            },
-            sound: "beep.wav",
-            smallIcon: "ic_launcher",
-            actionTypeId: "",
-            extra: null
-          }]
-        }).catch(err => console.error("Failed to schedule notification", err));
+        NotificationService.scheduleSmartNotification({
+          text: newTask.text,
+          triggerDate,
+          taskId: newTask.id,
+        }).then(() => {
+          setUnreadCount(prev => prev + 1);
+        });
       }
     }
   };
@@ -242,9 +234,12 @@ const App = () => {
     setTasks(prev => prev.map(task =>
       task.id === id ? { ...task, text: newText } : task
     ));
-
-    // Broadcast Update
     broadcastData({ type: 'update', id, text: newText });
+  };
+
+  const handleOpenNotifCenter = () => {
+    setIsNotifCenterOpen(true);
+    setUnreadCount(0); // Mark as read
   };
 
   return (
@@ -266,13 +261,18 @@ const App = () => {
         </div>
 
         <div className="flex gap-2 pointer-events-auto">
-          {/* Notifications Demo Button */}
+          {/* Notification Center Button */}
           <button
-            onClick={() => setIsNotifDemoOpen(true)}
-            className="h-10 w-10 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-orange-500 hover:border-orange-100 transition-all shadow-sm"
-            title="Notification Demo"
+            onClick={handleOpenNotifCenter}
+            className="relative h-10 w-10 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 hover:border-slate-200 transition-all shadow-sm"
+            title="Notifications"
           >
             <Bell size={16} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-slate-900 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </button>
 
           {/* Sync Button */}
@@ -409,6 +409,12 @@ const App = () => {
         onClose={() => setIsDocsOpen(false)}
       />
 
+      {/* Notification Center */}
+      <NotificationCenter
+        isOpen={isNotifCenterOpen}
+        onClose={() => setIsNotifCenterOpen(false)}
+      />
+
       {/* Sync Toast */}
       <AnimatePresence>
         {showSyncToast && (
@@ -453,29 +459,6 @@ const App = () => {
 
       {/* PWA Install Prompt */}
       <InstallPrompt />
-      {/* Notifications Demo Overlay */}
-      <AnimatePresence>
-        {isNotifDemoOpen && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm"
-          >
-            <div className="absolute inset-0" onClick={() => setIsNotifDemoOpen(false)} />
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-              className="relative z-10 w-full max-w-md"
-            >
-              <button
-                onClick={() => setIsNotifDemoOpen(false)}
-                className="absolute -top-12 right-0 text-white/50 hover:text-white"
-              >
-                <X size={24} />
-              </button>
-              <NotificationsDemo />
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };

@@ -99,6 +99,15 @@ const DocsOverlay = ({ isOpen, onClose }) => {
                                             Ensure your volume is up! The devices communicate via ultrasonic audio. Keep them close for a "magical" handshake.
                                         </p>
                                     </div>
+                                    <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 mt-4">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Wifi size={14} className="text-blue-600" />
+                                            <span className="text-xs font-bold uppercase text-blue-600 tracking-wider">Same Network</span>
+                                        </div>
+                                        <p className="text-xs text-blue-800 leading-relaxed">
+                                            Both devices must be connected to the <b>same Wi-Fi network</b> for peer-to-peer sync to work. Hotspot connections also work.
+                                        </p>
+                                    </div>
                                 </div>
                             </section>
 
