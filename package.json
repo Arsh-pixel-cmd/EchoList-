@@ -1,7 +1,7 @@
 {
   "name": "todoredefine",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -44,6 +44,7 @@
     "minimatch": "^10.2.1",
     "ejs": "^3.1.10",
     "filelist": "^1.0.4",
-    "jake": "^10.9.1"
+    "jake": "^10.9.1",
+    "serialize-javascript": "^7.0.5"
   }
 }
