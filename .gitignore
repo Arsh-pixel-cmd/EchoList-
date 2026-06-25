@@ -23,6 +23,11 @@ dist-ssr
 *.sln
 *.sw?
 
+#Ai-Tools
+openspec/
+agent/
+.agent/
+
 # Android Signing
 *.jks
 *.keystore

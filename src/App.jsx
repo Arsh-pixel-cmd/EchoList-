@@ -17,6 +17,7 @@ import InstallPrompt from './components/InstallPrompt';
 import NotificationCenter from './components/NotificationCenter';
 import { broadcastData } from './lib/sync/peer';
 import NotificationService from './services/NotificationService';
+import TaskFactory from './lib/TaskFactory';
 
 import * as chrono from 'chrono-node';
 import { Capacitor } from '@capacitor/core';
@@ -110,20 +111,24 @@ const App = () => {
 
   // Handle incoming data from Peer
   const handlePeerData = (data) => {
-    // 0. Handle Deletions
-    if (data && data.type === 'delete') {
-      setTasks(prev => prev.filter(t => t.id !== data.id));
-      return;
-    }
+    if (!data) return;
 
-    // 0.5 Handle Handshake (New Peer Connected)
-    if (data && data.type === 'handshake') {
-      broadcastData({ type: 'handshake', device: "Studio Terminal" });
-      broadcastData(tasks);
-      return;
-    }
+    const handlers = {
+      delete: (payload) => {
+        setTasks(prev => prev.filter(t => t.id !== payload.id));
+        NotificationService.cancelTaskNotification(payload.id);
+      },
+      handshake: (payload) => {
+        broadcastData({ type: 'handshake', device: "Studio Terminal" });
+        broadcastData(tasks);
+      },
+      update: (payload) => {
+        setTasks(prev => prev.map(task =>
+          task.id === payload.id ? { ...task, text: payload.text } : task
+        ));
+      }
+    };
 
-    // 1. Initial Sync (Array of Tasks)
     if (Array.isArray(data)) {
       setTasks(prev => {
         const existingIds = new Set(prev.map(t => t.id));
@@ -137,8 +142,14 @@ const App = () => {
       return;
     }
 
+    if (data.type && handlers[data.type]) {
+      handlers[data.type](data);
+      if (data.type === 'update') setShowSyncToast(true);
+      return;
+    }
+
     // 2. Single Task Update
-    if (data && data.text) {
+    if (data.text) {
       setTasks(prev => {
         if (prev.find(t => t.id === data.id)) return prev;
         return [data, ...prev];
@@ -166,45 +177,11 @@ const App = () => {
     setTasks(prev => prev.filter(t => t.id !== id));
     broadcastData({ type: 'delete', id });
 
-    if (Capacitor.isNativePlatform()) {
-      const notifId = Math.floor(id / 1000);
-      try {
-        await LocalNotifications.cancel({ notifications: [{ id: notifId }] });
-      } catch (e) {
-        console.error("Failed to cancel notification", e);
-      }
-    }
+    NotificationService.cancelTaskNotification(id);
   };
 
   const addTask = (text, source = "Desktop") => {
-    // Intelligent Parsing
-    const parsedDate = chrono.parseDate(text);
-    let reminderTime = null;
-
-    // Auto-detect category for theming
-    const category = NotificationService.detectCategory(text);
-    let meta = source === "Mobile"
-      ? "Synced via smartphone bridge"
-      : `${category.icon} ${category.label} · Captured via studio terminal`;
-
-    if (parsedDate) {
-      const d = new Date(parsedDate);
-      d.setMinutes(d.getMinutes() - 5);
-      reminderTime = d.toISOString();
-      const timeStr = parsedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      meta = `${category.icon} ${category.label} · Reminder at ${timeStr}`;
-    }
-
-    const newTask = {
-      id: Date.now(),
-      text,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      source,
-      meta,
-      reminderTime,
-      reminderSent: false,
-      categoryId: category.id,
-    };
+    const newTask = TaskFactory.createTask(text, source);
     setTasks([newTask, ...tasks]);
 
     // Broadcast to connected peers
@@ -216,8 +193,8 @@ const App = () => {
     }
 
     // ── Smart Notification Scheduling ────────────────────────────
-    if (reminderTime) {
-      const triggerDate = new Date(reminderTime);
+    if (newTask.reminderTime) {
+      const triggerDate = new Date(newTask.reminderTime);
       if (triggerDate > new Date()) {
         NotificationService.scheduleSmartNotification({
           text: newTask.text,

@@ -1,5 +1,6 @@
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
+import NotificationFactory from '../lib/NotificationFactory';
 
 // ── Todo Category Detection ─────────────────────────────────────────
 // Analyses the text of a todo and returns a category + notification config
@@ -135,19 +136,9 @@ const NotificationService = {
     // ── Smart Schedule — auto-detects category from text ───────────
     async scheduleSmartNotification({ text, triggerDate, taskId }) {
         const category = detectCategory(text);
-        const notifId = taskId ? Math.floor(taskId / 1000) : Math.floor(Math.random() * 100000);
-
-        const notification = {
-            title: `${category.icon} ${category.label} Reminder`,
-            body: text,
-            id: notifId,
-            schedule: { at: triggerDate, allowWhileIdle: true },
-            sound: 'beep.wav',
-            smallIcon: 'ic_launcher',
-            iconColor: category.color,
-            actionTypeId: category.actionTypeId,
-            extra: { taskId: String(taskId), categoryId: category.id },
-        };
+        
+        const notification = NotificationFactory.createNotificationPayload({ text, triggerDate, taskId, category });
+        const notifId = notification.id;
 
         // Save to history
         pushToHistory({
@@ -170,6 +161,17 @@ const NotificationService = {
         }
 
         return { notifId, category };
+    },
+
+    async cancelTaskNotification(taskId) {
+        if (Capacitor.isNativePlatform()) {
+            const notifId = Math.floor(taskId / 1000);
+            try {
+                await LocalNotifications.cancel({ notifications: [{ id: notifId }] });
+            } catch (e) {
+                console.error("Failed to cancel notification", e);
+            }
+        }
     },
 
     // ── Listeners ──────────────────────────────────────────────────
