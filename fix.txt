@@ -1,0 +1,221 @@
+================================================================================
+                       EchoList Bug Fix Report (fix.txt)
+================================================================================
+                      Generated: 2026-06-29
+                      Principles: SOLID + Factory Method
+================================================================================
+
+
+BUG #1: Default Capacitor Logo Appearing Instead of Custom App Icon
+=====================================================================
+
+ROOT CAUSE:
+  The directory `android/app/src/main/res/mipmap-anydpi-v26/` contained
+  adaptive icon XML config files (`ic_launcher.xml`, `ic_launcher_round.xml`)
+  that referenced Capacitor's default foreground/background drawables.
+
+  On Android 8.0+ (API 26+), the system prioritizes adaptive icon configs in
+  `mipmap-anydpi-v26` over density-specific PNG resources. So even though
+  custom PNGs existed in `mipmap-hdpi/`, `mipmap-xhdpi/`, etc., Android
+  ignored them and rendered the Capacitor default instead.
+
+SOLUTION:
+  1. Deleted the entire `android/app/src/main/res/mipmap-anydpi-v26/` folder.
+  2. Generated density-specific PNG icons (`ic_launcher.png` and
+     `ic_launcher_round.png`) from the custom `assets/icon.png` source using
+     `sips` (macOS image tool) for all Android density buckets:
+       - mipmap-mdpi:    48x48
+       - mipmap-hdpi:    72x72
+       - mipmap-xhdpi:   96x96
+       - mipmap-xxhdpi:  144x144
+       - mipmap-xxxhdpi: 192x192
+
+  Android now falls back to the legacy density PNGs, showing the correct icon.
+
+FILES MODIFIED:
+  - DELETED: android/app/src/main/res/mipmap-anydpi-v26/
+  - MODIFIED: android/app/src/main/res/mipmap-*/ic_launcher.png (regenerated)
+  - MODIFIED: android/app/src/main/res/mipmap-*/ic_launcher_round.png (regenerated)
+  - MODIFIED: update_icons.sh (added iOS directory existence check)
+
+
+BUG #2: Sonic Handshake Not Working (Broadcasting & Listening Both Broken)
+==========================================================================
+
+There were FIVE separate sub-bugs causing the Sonic Handshake to fail silently:
+
+SUB-BUG 2a: WASM Version Mismatch
+----------------------------------
+ROOT CAUSE:
+  `audio.js` used `locateFile` to load `ggwave.wasm` from a CDN URL hardcoded
+  to version `0.0.3`, but the installed npm package was `ggwave@0.4.0`. The JS
+  bindings expected a WASM binary with matching exported symbols. Loading a
+  mismatched WASM caused silent initialization failures or runtime errors when
+  calling `init()`, `encode()`, or `decode()`.
+
+SOLUTION:
+  Removed the `locateFile` override entirely. The `ggwave.js` module from
+  `ggwave@0.4.0` embeds its WASM binary inline (base64-encoded), so no
+  external fetch is needed. This guarantees version parity between JS and WASM.
+
+
+SUB-BUG 2b: Invalid Parameter Assignment (`captureDeviceId`)
+------------------------------------------------------------
+ROOT CAUSE:
+  The code set `params.captureDeviceId = -1` on the Emscripten `Parameters`
+  value object. However, `captureDeviceId` is NOT a bound property in the
+  C++ embind definition (see `emscripten.cpp` — only `payloadLength`,
+  `sampleRateInp`, `sampleRateOut`, `sampleRate`, `samplesPerFrame`,
+  `sampleFormatInp`, `sampleFormatOut`, and `operatingMode` are bound).
+
+  Assigning an unbound property on an Emscripten value object throws a
+  runtime TypeError in strict environments and silently fails in others.
+
+SOLUTION:
+  Removed the `params.captureDeviceId = -1` line. Device selection is handled
+  by the browser's `getUserMedia` API, not by GGWave parameters.
+
+
+SUB-BUG 2c: Wrong Arguments for `txToggleProtocol`
+---------------------------------------------------
+ROOT CAUSE:
+  The code called `gw.txToggleProtocol(instanceId, protocolId)`, but the
+  C++ embind signature is `txToggleProtocol(int txProtocolId, int state)`.
+  Passing the instance ID as the first arg selected the wrong protocol,
+  and the protocol ID as the second arg was interpreted as a boolean state.
+
+  Additionally, `rxToggleProtocol` was never called, so the receiver had
+  no active protocol to listen for — decode would always return empty.
+
+SOLUTION:
+  - Changed to `gw.txToggleProtocol(protocolId, 1)` — enable protocol 1
+    (PROTOCOL_AUDIBLE_FAST) for transmission.
+  - Added `gw.rxToggleProtocol(protocolId, 1)` — enable protocol 1 for
+    reception as well.
+
+
+SUB-BUG 2d: Wrong Typed Array for `decode()` (`Int8Array` → `Uint8Array`)
+-------------------------------------------------------------------------
+ROOT CAUSE:
+  In the `onaudioprocess` callback, audio samples were converted to an
+  `Int8Array` before being passed to `gw.decode(instanceId, byteView)`.
+  The Emscripten embind definition maps the second parameter to
+  `std::string`, and the JS-to-C++ converter only accepts `string` or
+  `Uint8Array`. Passing `Int8Array` caused a TypeError:
+    "Cannot pass non-string to std::string"
+
+SOLUTION:
+  Changed `new Int8Array(...)` to `new Uint8Array(...)` so the Emscripten
+  bridge can correctly convert the byte buffer to a C++ `std::string`.
+
+
+SUB-BUG 2e: Sample Rate Mismatch Between Devices
+-------------------------------------------------
+ROOT CAUSE:
+  The `AudioContext` was created without specifying a sample rate, defaulting
+  to the hardware's native rate. Different devices use different defaults:
+    - Most desktops: 48000 Hz
+    - Some mobile devices: 44100 Hz
+    - Some iOS devices: 48000 Hz
+
+  GGWave encodes data as specific audio frequencies. If the transmitter
+  broadcasts at 48000 Hz but the receiver captures at 44100 Hz, all
+  frequencies are pitch-shifted by the ratio 44100/48000 ≈ 0.919x, making
+  the signal undecodable.
+
+SOLUTION:
+  Forced both the transmitter and receiver `AudioContext` to initialize at
+  `{ sampleRate: 48000 }`, and set `params.sampleRateInp = 48000` and
+  `params.sampleRateOut = 48000` in the GGWave parameters. This ensures
+  consistent frequency mapping across all devices.
+
+FILES MODIFIED:
+  - src/lib/sync/audio.js (all five sub-bugs fixed in this file)
+
+
+BUG #3: "Memory Key" (Cognitive Link) Tab Not Working
+=====================================================
+
+ROOT CAUSE:
+  The phrase-based "Cognitive Link" feature derived a cryptographic identity
+  from a user-entered phrase using SubtleCrypto. This identity was meant to
+  pair two devices that entered the same phrase. However, the derived identity
+  was never used for actual peer discovery or connection — it only set local
+  state. There was no mechanism to find or connect to a peer with the same
+  derived key. The feature was fundamentally non-functional by design.
+
+SOLUTION:
+  Replaced the entire "Memory Key" / "Cognitive Link" tab with a "Link Sync"
+  tab that generates a shareable URL containing the local PeerJS peer ID:
+
+    https://<app-origin>/?pair=<peerId>
+
+  Flow:
+  1. Device A opens the sync overlay → sees "Link Sync" tab → a URL is
+     displayed with the embedded peer ID.
+  2. Device A copies or shares the URL to Device B (via clipboard, messaging,
+     AirDrop, QR code, etc.).
+  3. Device B opens the URL → the app reads the `?pair=` query parameter on
+     mount → automatically connects to Device A's PeerJS peer.
+  4. Alternatively, if Device B cannot click/open the URL directly, they can
+     paste the URL or the raw Peer ID into the "Connect to another device's link"
+     input and press "Connect".
+  5. Both devices exchange handshake messages and begin syncing.
+
+  The URL query parameter is cleaned from the address bar after processing
+  to prevent stale reconnection attempts on page reload.
+
+  On mobile devices with Web Share API support, a native "Share Link" button
+  is shown alongside "Copy Link" for frictionless sharing.
+
+FILES MODIFIED:
+  - src/components/SyncOverlay.jsx
+    - Removed: `deriveIdentity` import, `phrase` state, `handlePhraseSubmit`
+    - Added: `shareUrl` computed from peerId, `handleCopyLink`,
+      `handleShareLink`, `handleUrlPairing` (mount listener)
+    - Added: `pasteValue` state and `handleConnectWithLink` method for manual pairing
+    - Replaced: Cognitive Link UI with Link Sync UI (URL display + buttons + manual paste form)
+    - Added: Auto-connection from `?pair=` query parameter on peer open
+    - Added: ESLint-disable comments/cleanup for unused vars parameters
+  - src/App.jsx
+    - Cleaned: Unused `chrono` import, unused `action` callback param, unused `payload` param
+
+
+
+CLEANUP: Console.log Removal
+=============================
+Removed all debugging `console.log`, `console.warn`, and `console.error`
+statements from the following modified files:
+  - src/components/SyncOverlay.jsx
+  - src/lib/sync/peer.js
+  - src/lib/sync/audio.js
+  - src/App.jsx
+
+Note: `console.error` statements in `NotificationService.js` (catch blocks
+for critical native plugin failures) were intentionally retained as they
+serve a production error-reporting purpose, not debugging.
+
+
+DESIGN PRINCIPLES FOLLOWED
+===========================
+SOLID:
+  - Single Responsibility: Each function handles one concern
+    (handleUrlPairing, handleCopyLink, handleShareLink are separate)
+  - Open/Closed: The pairing system is extensible — new pairing methods
+    (QR code, NFC) can be added as new tabs without modifying existing ones
+  - Liskov Substitution: All pairing methods ultimately produce the same
+    result (a PeerJS connection) and call the same callbacks
+  - Interface Segregation: Callbacks (onSync, onPeerData, onConnectionChange)
+    are independent and optional
+  - Dependency Inversion: SyncOverlay depends on abstractions (peer.js API)
+    not concrete PeerJS internals
+
+Factory Method:
+  - `initPeer()` in peer.js acts as a factory that creates and configures
+    the PeerJS instance, hiding construction complexity from consumers
+  - The pairing tab system uses a strategy-like pattern where each tab
+    (Link Sync, Sonic Handshake) is an independent pairing strategy
+
+================================================================================
+                              END OF FIX REPORT
+================================================================================

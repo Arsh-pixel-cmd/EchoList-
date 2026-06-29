@@ -1,5 +1,7 @@
 import ggwave from 'ggwave';
 
+const PROTOCOL_AUDIBLE_FAST = 1;
+
 let ggwaveInstance = null;
 let audioContext = null;
 let stream = null;
@@ -8,17 +10,9 @@ const initGGWave = async () => {
     if (ggwaveInstance) return ggwaveInstance;
 
     try {
-        ggwaveInstance = await ggwave({
-            locateFile: (path) => {
-                if (path.endsWith('.wasm')) {
-                    return `https://cdn.jsdelivr.net/npm/ggwave@0.0.3/ggwave.wasm`;
-                }
-                return path;
-            }
-        });
+        ggwaveInstance = await ggwave();
         return ggwaveInstance;
-    } catch (e) {
-        console.error("GGWave Init Error:", e);
+    } catch {
         return null;
     }
 };
@@ -35,7 +29,6 @@ export const broadcastAudio = async (text) => {
     // 1. Ensure clean instance if previously aborted
     try {
         if (ggwaveInstance && ggwaveInstance.HEAP8 && ggwaveInstance.HEAP8.buffer.byteLength === 0) {
-            console.warn("GGWave Instance seemed detached/aborted. Re-initializing.");
             ggwaveInstance = null;
         }
     } catch { ggwaveInstance = null; }
@@ -46,7 +39,6 @@ export const broadcastAudio = async (text) => {
     if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
     if (audioContext.state === 'suspended') await audioContext.resume();
 
-    const protocolId = 1; // Audible
     const payload = text;
     const sampleRate = audioContext.sampleRate;
 
@@ -62,31 +54,23 @@ export const broadcastAudio = async (text) => {
     params.soundId = -1;
     params.soundMarkerThreshold = 0;
 
-    // CRITICAL: Disable internal Audio Capture (cause of format: 0 errors)
-    // The library tries to open default capture device if this is not -1
-    params.captureDeviceId = -1;
-
     // Assign ENUM OBJECTS
     params.sampleFormatInp = gw.SampleFormat.GGWAVE_SAMPLE_FORMAT_F32;
     params.sampleFormatOut = gw.SampleFormat.GGWAVE_SAMPLE_FORMAT_F32;
     params.operatingMode = gw.GGWAVE_OPERATING_MODE_TX;
-
-    console.log("Initialize Broadcast (TX) with Enums & NoCapture:", params);
 
     try {
         const instanceId = gw.init(params);
         if (instanceId < 0) throw new Error("GGWave init failed (code " + instanceId + ")");
 
         // Enable Protocol 1 (Audible)
-        // Note: txToggleProtocol(instanceId, protocolId)
         if (gw.txToggleProtocol) {
-            gw.txToggleProtocol(instanceId, protocolId);
+            gw.txToggleProtocol(PROTOCOL_AUDIBLE_FAST, 1);
         }
 
-        const waveform = gw.encode(instanceId, payload, protocolId, 10);
+        const waveform = gw.encode(instanceId, payload, PROTOCOL_AUDIBLE_FAST, 10);
 
         if (!waveform) {
-            console.error("GGWave Encode Failed");
             return;
         }
 
@@ -108,7 +92,6 @@ export const broadcastAudio = async (text) => {
         return source;
 
     } catch (e) {
-        console.error("GGWave Broadcast Error:", e);
         // Force full reset
         ggwaveInstance = null;
         throw new Error("Broadcast failed: " + e.message);
@@ -124,7 +107,7 @@ export const listenAudio = async (onMessage) => {
     const gw = await initGGWave();
     if (!gw) return;
 
-    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
     if (audioContext.state === 'suspended') await audioContext.resume();
 
     try {
@@ -135,8 +118,7 @@ export const listenAudio = async (onMessage) => {
                 noiseSuppression: false
             }
         });
-    } catch (e) {
-        console.error("Mic Access Denied", e);
+    } catch {
         return;
     }
 
@@ -165,13 +147,13 @@ export const listenAudio = async (onMessage) => {
         params.sampleFormatOut = gw.SampleFormat.GGWAVE_SAMPLE_FORMAT_F32;
         params.operatingMode = gw.GGWAVE_OPERATING_MODE_RX; // Enum Object
 
-        // CRITICAL: Disable internal Audio Capture for RX too
-        params.captureDeviceId = -1;
-
-        console.log("Initialize Listen (RX) with Enums:", params);
-
         captureId = gw.init(params);
         if (captureId < 0) throw new Error("GGWave RX init failed");
+
+        // Enable Protocol 1 (Audible) on receiver too
+        if (gw.rxToggleProtocol) {
+            gw.rxToggleProtocol(PROTOCOL_AUDIBLE_FAST, 1);
+        }
 
         // Processing Loop
         processor.onaudioprocess = (e) => {
@@ -193,19 +175,16 @@ export const listenAudio = async (onMessage) => {
             // GGWave JS bindings usually accept TypedlyArrays and copy them to heap
             // Try explicit decode
             try {
-                // Fix: BindingError "Cannot pass non-string to std::string"
-                // The binding expects a byte-view (Int8Array) of the data
-                const byteView = new Int8Array(inputData.buffer, inputData.byteOffset, inputData.byteLength);
+                // The binding expects a byte-view (Uint8Array) of the data
+                const byteView = new Uint8Array(inputData.buffer, inputData.byteOffset, inputData.byteLength);
                 const res = gw.decode(captureId, byteView);
 
                 if (res && res.length > 0) {
                     // Decode the Int8Array/Uint8Array to a string
                     const text = new TextDecoder("utf-8").decode(res);
-                    // Fix: Null Termination issues. C++ strings often have trailing \0
                     const cleanText = text.replace(/\0/g, '').trim();
 
                     if (cleanText) {
-                        console.log(`GGWave Decoded: "${cleanText}" (Original len: ${text.length})`);
                         // Handle the message callback
                         if (typeof onMessage === 'function') {
                             onMessage(cleanText);
@@ -214,8 +193,8 @@ export const listenAudio = async (onMessage) => {
                         }
                     }
                 }
-            } catch (err) {
-                console.error("Decode Loop Error:", err);
+            } catch {
+                // Ignore decoding errors silently in production
             }
         };
 
@@ -223,11 +202,9 @@ export const listenAudio = async (onMessage) => {
             cleanup();
             processor.disconnect();
             source.disconnect();
-            // gw.free(captureId);
         };
 
-    } catch (e) {
-        console.error("RX Init Error:", e);
+    } catch {
         ggwaveInstance = null;
         return;
     }

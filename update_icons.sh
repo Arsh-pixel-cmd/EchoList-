@@ -2,8 +2,12 @@
 SRC="assets/icon.png"
 
 # iOS (1024x1024)
-echo "Generating iOS Icon..."
-sips -z 1024 1024 "$SRC" --out "ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png"
+if [ -d "ios" ]; then
+    echo "Generating iOS Icon..."
+    sips -z 1024 1024 "$SRC" --out "ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png"
+else
+    echo "Skipping iOS Icon (directory not found)..."
+fi
 
 # Android
 # Remove adaptive icon directory to prevent override

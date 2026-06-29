@@ -3,7 +3,7 @@
   "appName": "EchoList",
   "webDir": "dist",
   "server": {
-    "url": "https://www.echolist.in/"
+    "url": "http://localhost:5173/"
   },
   "plugins": {
     "LocalNotifications": {

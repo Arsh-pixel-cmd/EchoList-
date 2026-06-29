@@ -72,11 +72,8 @@ export const connectToPeer = (remotePeerId, onData, onConnected, onError) => {
     }
 
     if (peerInstance.disconnected) {
-        console.warn("Peer is disconnected. Reconnecting before dialing...");
         peerInstance.reconnect();
     }
-
-    console.log(`[PeerJS] dialing ${remotePeerId}...`);
 
     // Connect to peer (let PeerJS negotiate)
     const conn = peerInstance.connect(remotePeerId, {
@@ -90,13 +87,11 @@ export const connectToPeer = (remotePeerId, onData, onConnected, onError) => {
 
     // Handle immediate connection errors
     conn.on('error', (err) => {
-        console.error(`[PeerJS] Connection Error to ${remotePeerId}:`, err);
         if (onError) onError(err);
     });
 
     // Handle connection close (so we can clean up if it never opened)
     conn.on('close', () => {
-        // console.log(`[PeerJS] Connection to ${remotePeerId} closed.`);
         // Note: PeerJS might close immediately if ID not found.
     });
 
@@ -107,7 +102,6 @@ export const connectToPeer = (remotePeerId, onData, onConnected, onError) => {
 
 const setupConnection = (conn, onData, onConnected) => {
     conn.on('open', () => {
-        console.log(`[PeerJS] Connection ESTABLISHED to: ${conn.peer}`);
         connections.push(conn);
         if (onConnected) onConnected(conn);
 
@@ -125,12 +119,10 @@ const setupConnection = (conn, onData, onConnected) => {
     });
 
     conn.on('close', () => {
-        console.log(`[PeerJS] Connection closed: ${conn.peer}`);
         connections = connections.filter(c => c !== conn);
     });
 
-    conn.on('error', (err) => {
-        console.warn(`[PeerJS] Connection error on ${conn.peer}:`, err);
+    conn.on('error', () => {
         connections = connections.filter(c => c !== conn);
     });
 };
@@ -144,7 +136,6 @@ const startHeartbeat = (conn) => {
         try {
             conn.send({ type: 'ping' });
         } catch {
-            console.warn(`[PeerJS] Heartbeat failed for ${conn.peer}, closing.`);
             conn.close();
             connections = connections.filter(c => c !== conn);
             clearInterval(interval);
@@ -161,7 +152,7 @@ export const broadcastData = (data) => {
             try {
                 conn.send(data);
             } catch {
-                console.warn("Failed to send to peer:", conn.peer);
+                // Failed to send to peer
             }
         }
     });
@@ -179,8 +170,6 @@ export const ensureConnection = () => {
             resolve(peerInstance.id);
             return;
         }
-
-        console.log("Peer disconnected or closed, reconnecting...");
 
         const onOpen = () => {
             cleanupListeners();
@@ -212,3 +201,4 @@ export const ensureConnection = () => {
 export const getActiveConnectionCount = () => {
     return connections.length;
 };
+

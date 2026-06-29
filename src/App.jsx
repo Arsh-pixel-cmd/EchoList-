@@ -19,7 +19,6 @@ import { broadcastData } from './lib/sync/peer';
 import NotificationService from './services/NotificationService';
 import TaskFactory from './lib/TaskFactory';
 
-import * as chrono from 'chrono-node';
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Analytics } from '@vercel/analytics/react';
@@ -59,8 +58,8 @@ const App = () => {
         // When a notification is received, update count
         setUnreadCount(prev => prev + 1);
       },
-      (action) => {
-        console.log('Notification action:', action.actionId);
+      () => {
+        // Notification action received
       }
     );
 
@@ -118,7 +117,7 @@ const App = () => {
         setTasks(prev => prev.filter(t => t.id !== payload.id));
         NotificationService.cancelTaskNotification(payload.id);
       },
-      handshake: (payload) => {
+      handshake: () => {
         broadcastData({ type: 'handshake', device: "Studio Terminal" });
         broadcastData(tasks);
       },
