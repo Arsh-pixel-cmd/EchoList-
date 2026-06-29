@@ -2,7 +2,7 @@
   "appId": "com.echolist.app",
   "appName": "EchoList",
   "webDir": "dist",
-  "server": {
+  "_server": {
     "url": "http://localhost:5173/"
   },
   "plugins": {
